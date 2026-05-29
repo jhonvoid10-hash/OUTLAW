@@ -17,11 +17,11 @@
 # Run on your laptop to use your residential IP for hCaptcha PoW auto-solve.
 #
 # Setup (one time):
-#   pip install playwright httpx
+#   pip install playwright httpx httpx[socks]
 #   playwright install chromium
 #
 # Run:
-#   python outlaw_bot.py
+#   python bot.py
 
 import asyncio
 import base64
@@ -238,7 +238,8 @@ async def main():
 
     # --- Proxy setting ---
     print("\nProxy residential (kosongkan jika tidak pakai)")
-    print("Format: http://user:pass@host:port  atau  http://host:port")
+    print("Format: socks5://user:pass@host:port  atau  http://user:pass@host:port")
+    print("Contoh: socks5://AsepsundrfZ9:c2a99exB8@51.79.192.226:10069")
     proxy_input = input("Proxy [kosong=skip]: ").strip()
     proxy_url = proxy_input if proxy_input else None
     if proxy_url:
@@ -249,6 +250,7 @@ async def main():
     # Ambil IP publik (lewat proxy kalau ada)
     try:
         if proxy_url:
+            # httpx support socks5 via httpx[socks]
             async with httpx.AsyncClient(proxy=proxy_url, timeout=10) as tmp:
                 r = await tmp.get("https://api.ipify.org?format=json")
                 local_ip = r.json().get("ip", "0.0.0.0")
@@ -256,7 +258,8 @@ async def main():
             async with httpx.AsyncClient(timeout=5) as tmp:
                 r = await tmp.get("https://api.ipify.org?format=json")
                 local_ip = r.json().get("ip", "0.0.0.0")
-    except Exception:
+    except Exception as e:
+        print(f"Warning: Gagal ambil IP publik: {e}")
         local_ip = "0.0.0.0"
     print(f"IP publik: {local_ip}")
 
