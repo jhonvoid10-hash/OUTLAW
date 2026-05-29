@@ -198,22 +198,27 @@ async def play_session(http, page, jwt, user_id, local_ip, session_num):
         except Exception as e:
             print(f"  Level {cur_level} error: {e}")
             break
-    print(f"  {done}/{lvl_count} level. Reload + hCaptcha...")
-    await page.goto(GAME_URL, wait_until="domcontentloaded", timeout=30000)
-    await asyncio.sleep(3)
-    hcap = await auto_solve_hcaptcha(page)
-    complete_h = {**h}
-    if hcap:
-        complete_h["X-HCaptcha-Token"] = hcap
-        complete_h["X-HCaptcha-Remote-Ip"] = local_ip
+    print(f"  {done}/{lvl_count} level selesai.")
+    
+    # Session complete (optional - token sudah didapat dari level)
+    print("  Coba session complete (bonus, tidak wajib)...")
     try:
-        rc = await http.post(f"{API_BASE}/api/solo/session/{sid}/complete", headers=complete_h, json={})
-        if rc.status_code in (200, 201):
-            print(f"  Session complete! tokens={tokens}")
+        await page.goto(GAME_URL, wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(3)
+        hcap = await auto_solve_hcaptcha(page)
+        
+        if hcap:
+            complete_h = {**h, "x-hcaptcha-token": hcap, "x-hcaptcha-remote-ip": local_ip}
+            rc = await http.post(f"{API_BASE}/api/solo/session/{sid}/complete", headers=complete_h, json={})
+            if rc.status_code in (200, 201):
+                print(f"  ✅ Session complete! Total tokens: {tokens}")
+            else:
+                print(f"  ⚠️  Session complete HTTP {rc.status_code} (tokens tetap masuk)")
         else:
-            print(f"  Session complete HTTP {rc.status_code}: {rc.text[:300]}")
+            print(f"  ⚠️  hCaptcha gagal, skip session complete (tokens tetap masuk)")
     except Exception as e:
-        print(f"  Session complete error: {e}")
+        print(f"  ⚠️  Session complete error: {e} (tokens tetap masuk)")
+    
     return {"session_id": sid, "levels": done, "tokens": tokens}
 
 async def main():
@@ -246,10 +251,12 @@ async def main():
     use_proxy_for_browser = False
     if proxy_url:
         print(f"Proxy API: {proxy_url}")
-        choice = input("Pakai proxy untuk browser juga? (y/n) [n]: ").strip().lower()
-        use_proxy_for_browser = (choice == 'y')
+        choice = input("Pakai proxy untuk browser juga? (y/n) [y]: ").strip().lower()
+        use_proxy_for_browser = (choice != 'n')  # default YES
         if not use_proxy_for_browser:
-            print("⚠️  Browser pakai IP lokal, API pakai proxy")
+            print("⚠️  Browser pakai IP lokal (hCaptcha mungkin gagal)")
+        else:
+            print("✅ Browser + API pakai proxy residential")
     else:
         print("Tidak pakai proxy (pakai IP lokal)")
 
