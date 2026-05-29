@@ -235,19 +235,39 @@ async def main():
         delay = float(input("Jeda detik [3]: ").strip() or "3")
     except ValueError:
         num_sessions, delay = 10, 3.0
+
+    # --- Proxy setting ---
+    print("\nProxy residential (kosongkan jika tidak pakai)")
+    print("Format: http://user:pass@host:port  atau  http://host:port")
+    proxy_input = input("Proxy [kosong=skip]: ").strip()
+    proxy_url = proxy_input if proxy_input else None
+    if proxy_url:
+        print(f"Pakai proxy: {proxy_url}")
+    else:
+        print("Tidak pakai proxy (pakai IP lokal)")
+
+    # Ambil IP publik (lewat proxy kalau ada)
     try:
-        async with httpx.AsyncClient() as tmp:
-            r = await tmp.get("https://api.ipify.org?format=json", timeout=5)
-            local_ip = r.json().get("ip", "0.0.0.0")
+        if proxy_url:
+            async with httpx.AsyncClient(proxy=proxy_url, timeout=10) as tmp:
+                r = await tmp.get("https://api.ipify.org?format=json")
+                local_ip = r.json().get("ip", "0.0.0.0")
+        else:
+            async with httpx.AsyncClient(timeout=5) as tmp:
+                r = await tmp.get("https://api.ipify.org?format=json")
+                local_ip = r.json().get("ip", "0.0.0.0")
     except Exception:
         local_ip = "0.0.0.0"
-    print(f"IP kamu: {local_ip}")
+    print(f"IP publik: {local_ip}")
+
     results = []
     async with async_playwright() as pw:
-        # headless=True — sama seperti cloud bot, IP residential kamu yang bikin hCaptcha percaya
+        # Browser juga lewat proxy kalau ada
+        launch_args = ["--disable-blink-features=AutomationControlled"]
         browser = await pw.chromium.launch(
             headless=True,
-            args=["--disable-blink-features=AutomationControlled"]
+            args=launch_args,
+            proxy={"server": proxy_url} if proxy_url else None,
         )
         ctx = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
@@ -263,7 +283,13 @@ async def main():
         except Exception:
             bb_ip = local_ip
         print(f"IP browser: {bb_ip}")
-        async with httpx.AsyncClient(timeout=30.0) as http:
+
+        # httpx juga lewat proxy
+        http_kwargs = {"timeout": 30.0}
+        if proxy_url:
+            http_kwargs["proxy"] = proxy_url
+
+        async with httpx.AsyncClient(**http_kwargs) as http:
             for snum in range(1, num_sessions + 1):
                 res = await play_session(http, page, jwt, user_id, bb_ip, snum)
                 results.append(res)
