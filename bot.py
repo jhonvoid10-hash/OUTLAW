@@ -238,12 +238,18 @@ async def main():
 
     # --- Proxy setting ---
     print("\nProxy residential (kosongkan jika tidak pakai)")
-    print("Format: socks5://user:pass@host:port  atau  http://user:pass@host:port")
-    print("Contoh: socks5://AsepsundrfZ9:c2a99exB8@51.79.192.226:10069")
+    print("Format: http://user:pass@host:port")
+    print("Contoh: http://AsepsundrfZ9:c2a99exB8@51.79.192.226:10069")
     proxy_input = input("Proxy [kosong=skip]: ").strip()
     proxy_url = proxy_input if proxy_input else None
+    
+    use_proxy_for_browser = False
     if proxy_url:
-        print(f"Pakai proxy: {proxy_url}")
+        print(f"Proxy API: {proxy_url}")
+        choice = input("Pakai proxy untuk browser juga? (y/n) [n]: ").strip().lower()
+        use_proxy_for_browser = (choice == 'y')
+        if not use_proxy_for_browser:
+            print("⚠️  Browser pakai IP lokal, API pakai proxy")
     else:
         print("Tidak pakai proxy (pakai IP lokal)")
 
@@ -265,12 +271,20 @@ async def main():
 
     results = []
     async with async_playwright() as pw:
-        # Browser juga lewat proxy kalau ada
         launch_args = ["--disable-blink-features=AutomationControlled"]
+        
+        # Proxy untuk browser (optional, sering gagal karena WebSocket)
+        playwright_proxy = None
+        if proxy_url and use_proxy_for_browser:
+            playwright_proxy = {"server": proxy_url}
+            print(f"Browser proxy: {proxy_url}")
+        else:
+            print("Browser: IP lokal")
+        
         browser = await pw.chromium.launch(
             headless=True,
             args=launch_args,
-            proxy={"server": proxy_url} if proxy_url else None,
+            proxy=playwright_proxy,
         )
         ctx = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
